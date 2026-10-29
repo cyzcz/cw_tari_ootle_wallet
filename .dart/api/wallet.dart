@@ -18,10 +18,16 @@ Future<String> addressFromSeed(
     RustLib.instance.api
         .crateApiWalletAddressFromSeed(seedWords: seedWords, network: network);
 
-Future<bool> validateAddress(
+bool validateAddress(
         {required String address, required TariOotleNetwork network}) =>
     RustLib.instance.api
         .crateApiWalletValidateAddress(address: address, network: network);
+
+/// The claim public key (hex) an L1 burn must target so the owner of this L2 address can claim it.
+/// An Ootle address carries its account public key, which is that key.
+Future<String> claimPublicKeyFromAddress({required String address}) =>
+    RustLib.instance.api
+        .crateApiWalletClaimPublicKeyFromAddress(address: address);
 
 /// The current epoch, to use as a new wallet's birthday so its first scan skips older history.
 Future<BigInt> getCurrentEpoch({required String indexerUrl}) =>

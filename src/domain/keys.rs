@@ -50,3 +50,27 @@ pub(crate) fn parse_seed(seed_words: &str) -> anyhow::Result<CipherSeed> {
     let words = SeedWords::from_str(seed_words.trim()).map_err(|e| anyhow::anyhow!("invalid seed words: {e}"))?;
     Ok(CipherSeed::from_mnemonic(&words, None)?)
 }
+
+#[cfg(test)]
+mod tests {
+    use tari_crypto::tari_utilities::hex::Hex;
+
+    use super::*;
+    use crate::api::wallet::claim_public_key_from_address;
+
+    #[test]
+    fn address_carries_the_burn_claim_key() {
+        let keys = AccountKeys::from_seed(&CipherSeed::random(), Network::Esmeralda, 0);
+        let from_address = claim_public_key_from_address(keys.address().to_string()).unwrap();
+        assert_eq!(from_address, keys.account_public_key().to_hex());
+    }
+
+    #[test]
+    fn restore_reproduces_the_address() {
+        let created = crate::api::wallet::create_wallet(crate::api::wallet::TariOotleNetwork::Esmeralda).unwrap();
+        assert_eq!(created.seed_words.split(' ').count(), 24);
+        assert!(created.address.starts_with("otl_esm_"), "{}", created.address);
+        let restored = AccountKeys::from_words(&created.seed_words, Network::Esmeralda).unwrap().address();
+        assert_eq!(restored.to_string(), created.address);
+    }
+}

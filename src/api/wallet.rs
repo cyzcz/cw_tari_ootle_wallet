@@ -46,9 +46,18 @@ pub fn address_from_seed(seed_words: String, network: TariOotleNetwork) -> anyho
     Ok(AccountKeys::from_words(&seed_words, network.into())?.address().to_string())
 }
 
+#[flutter_rust_bridge::frb(sync)]
 pub fn validate_address(address: String, network: TariOotleNetwork) -> bool {
     let network: Network = network.into();
     OotleAddress::from_str(&address).is_ok_and(|a| a.validate().is_ok() && a.network() == network)
+}
+
+/// The claim public key (hex) an L1 burn must target so the owner of this L2 address can claim it.
+/// An Ootle address carries its account public key, which is that key.
+pub fn claim_public_key_from_address(address: String) -> anyhow::Result<String> {
+    let address = OotleAddress::from_str(&address)?;
+    address.validate()?;
+    Ok(address.account_public_key().to_hex())
 }
 
 /// The current epoch, to use as a new wallet's birthday so its first scan skips older history.
