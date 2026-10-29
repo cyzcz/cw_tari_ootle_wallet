@@ -31,6 +31,11 @@ tari_ootle_address = "=0.14.0"
 tari_crypto = "0.24.1"
 tokio = { version = "1.49", features = ["rt-multi-thread", "macros"] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+# Same versions reqwest's TLS stack pulls in; see src/android.rs.
+jni = { version = "0.22", default-features = false }
+rustls-platform-verifier = "0.7.1"
+
 [dev-dependencies]
 tempfile = "3"
 

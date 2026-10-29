@@ -5,6 +5,8 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
+use futures::FutureExt;
+use std::panic::AssertUnwindSafe;
 use tokio::task::AbortHandle;
 
 use crate::{
@@ -30,19 +32,32 @@ static SCANS: LazyLock<Mutex<HashMap<String, AbortHandle>>> = LazyLock::new(Defa
 pub async fn start_scan(sink: StreamSink<ScanEvent>, name: String) -> anyhow::Result<()> {
     let wallet = Wallet::get(&name)?;
     let task = tokio::spawn(async move {
-        let result = scan::scan(&wallet, |has_more| {
+        // A panic in a spawned task would otherwise just close the stream with no event.
+        let result = AssertUnwindSafe(scan::scan(&wallet, |has_more| {
             let _ = sink.add(ScanEvent::Progress { has_more });
-        })
+        }))
+        .catch_unwind()
         .await;
         let _ = sink.add(match result {
-            Ok(()) => ScanEvent::Completed,
-            Err(e) => ScanEvent::Failed { message: format!("{e:#}") },
+            Ok(Ok(())) => ScanEvent::Completed,
+            Ok(Err(e)) => ScanEvent::Failed { message: format!("{e:#}") },
+            Err(panic) => ScanEvent::Failed {
+                message: format!("scan panicked: {}", panic_message(&*panic)),
+            },
         });
     });
     if let Some(old) = SCANS.lock().unwrap_or_else(|e| e.into_inner()).insert(name, task.abort_handle()) {
         old.abort();
     }
     Ok(())
+}
+
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> &str {
+    panic
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| panic.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("unknown panic")
 }
 
 pub fn stop_scan(name: String) {

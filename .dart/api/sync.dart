@@ -8,6 +8,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'sync.freezed.dart';
 
+// These functions are ignored because they are not marked as `pub`: `panic_message`
+
 /// Scans the wallet until it is up to date. A new scan of the same wallet replaces a running one.
 /// Each pass is saved before its event fires, so stopping mid-scan loses nothing.
 Stream<ScanEvent> startScan({required String name}) =>

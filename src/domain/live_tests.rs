@@ -20,7 +20,11 @@ fn indexer() -> String {
 #[ignore = "live: needs the Esmeralda indexer"]
 async fn live_fresh_wallet_scans_clean() {
     let dir = tempfile::tempdir().unwrap();
-    let epoch = crate::api::wallet::get_current_epoch(indexer()).await.unwrap();
+    // OOTLE_BIRTHDAY=0 times a restore-style scan from genesis.
+    let epoch = match std::env::var("OOTLE_BIRTHDAY") {
+        Ok(b) => b.parse().unwrap(),
+        Err(_) => crate::api::wallet::get_current_epoch(indexer()).await.unwrap(),
+    };
     let keys = AccountKeys::from_seed(&CipherSeed::random(), Network::Esmeralda, 0);
     let w = Wallet::open("live-fresh", dir.path().to_str().unwrap(), keys, indexer(), epoch).unwrap();
     let t = std::time::Instant::now();

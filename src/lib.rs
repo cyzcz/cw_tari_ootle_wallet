@@ -1,3 +1,5 @@
+#[cfg(target_os = "android")]
+mod android;
 pub mod api;
 pub(crate) mod domain;
 mod frb_generated;
