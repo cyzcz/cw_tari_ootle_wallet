@@ -2,21 +2,51 @@ use std::str::FromStr;
 
 use ootle_rs::{crypto::derive_ristretto_key, keys::OotleSecretKey, Network};
 use tari_common_types::seeds::{cipher_seed::CipherSeed, mnemonic::Mnemonic, seed_words::SeedWords};
+use tari_crypto::{
+    keys::PublicKey,
+    ristretto::{RistrettoPublicKey, RistrettoSecretKey},
+};
+use tari_ootle_address::OotleAddress;
 
 // Same branch labels walletd's KeyManager uses (KeyBranch::Account / ViewOnlyKey), so a seed
 // restored here lands on the same account as walletd and Universe.
 const ACCOUNT_BRANCH: &[u8] = b"account";
 const VIEW_BRANCH: &[u8] = b"view_only_key";
 
-pub(crate) fn parse_seed(seed_words: &str) -> anyhow::Result<CipherSeed> {
-    let words = SeedWords::from_str(seed_words).map_err(|e| anyhow::anyhow!("invalid seed words: {e}"))?;
-    Ok(CipherSeed::from_mnemonic(&words, None)?)
+pub(crate) struct AccountKeys {
+    pub network: Network,
+    pub account_secret: RistrettoSecretKey,
+    pub view_secret: RistrettoSecretKey,
 }
 
-pub(crate) fn account_keys(seed: &CipherSeed, network: Network, index: u64) -> OotleSecretKey {
-    OotleSecretKey::new(
-        network,
-        derive_ristretto_key(seed.entropy(), ACCOUNT_BRANCH, index),
-        derive_ristretto_key(seed.entropy(), VIEW_BRANCH, index),
-    )
+impl AccountKeys {
+    pub fn from_seed(seed: &CipherSeed, network: Network, index: u64) -> Self {
+        Self {
+            network,
+            account_secret: derive_ristretto_key(seed.entropy(), ACCOUNT_BRANCH, index),
+            view_secret: derive_ristretto_key(seed.entropy(), VIEW_BRANCH, index),
+        }
+    }
+
+    pub fn from_words(seed_words: &str, network: Network) -> anyhow::Result<Self> {
+        Ok(Self::from_seed(&parse_seed(seed_words)?, network, 0))
+    }
+
+    pub fn secret(&self) -> OotleSecretKey {
+        OotleSecretKey::new(self.network, self.account_secret.clone(), self.view_secret.clone())
+    }
+
+    pub fn address(&self) -> OotleAddress {
+        self.secret().to_address()
+    }
+
+    /// The key an L1 burn targets so this account can claim it.
+    pub fn account_public_key(&self) -> RistrettoPublicKey {
+        RistrettoPublicKey::from_secret_key(&self.account_secret)
+    }
+}
+
+pub(crate) fn parse_seed(seed_words: &str) -> anyhow::Result<CipherSeed> {
+    let words = SeedWords::from_str(seed_words.trim()).map_err(|e| anyhow::anyhow!("invalid seed words: {e}"))?;
+    Ok(CipherSeed::from_mnemonic(&words, None)?)
 }
