@@ -1,0 +1,20 @@
+[package]
+name = "rust_lib_cw_tari_ootle"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[dependencies]
+anyhow = "1"
+flutter_rust_bridge = "=2.11.1"
+ootle-rs = "0.30.0"
+tari_common_types = "=6.3.0-pre.2"
+tari_ootle_address = "0.15"
+tari_crypto = "0.24.1"
+tokio = { version = "1.49", features = ["rt-multi-thread", "macros"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
