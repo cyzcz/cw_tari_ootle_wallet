@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! reqwest's rustls checks certificates through `rustls-platform-verifier`, which on Android must
 //! be handed the app's Context over JNI before the first HTTPS request, or every indexer call
 //! panics. The host app's plugin calls this once, right after loading the library, and logs a

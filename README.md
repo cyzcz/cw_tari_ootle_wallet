@@ -27,6 +27,7 @@ There is no mainnet indexer yet, so this is Esmeralda only for now.
 cargo test --lib                       # unit tests
 flutter_rust_bridge_codegen generate   # regenerate src/frb_generated.rs and .dart/
 cargo ndk -t arm64-v8a --platform 21 build --release
+scripts/file_license_check.sh          # every source file carries the Tari header
 ```
 
 Cake's `scripts/prepare_tari_ootle.sh` clones a pinned rev of this repo, runs the codegen and builds the Android and iOS libraries.

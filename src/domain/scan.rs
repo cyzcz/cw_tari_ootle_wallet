@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! One scan: refresh the revealed balance, then drain the stealth UTXO stream for TARI from the
 //! wallet's cursor, keeping the outputs addressed to this account and marking the ones it spent.
 //!

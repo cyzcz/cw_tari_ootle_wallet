@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Claiming L1 (Minotari) burns into this wallet.
 
 use crate::{

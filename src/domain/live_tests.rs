@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Live Esmeralda checks. `cargo test --lib live -- --ignored --nocapture`
 //! (OOTLE_INDEXER_URL overrides the indexer.)
 //!

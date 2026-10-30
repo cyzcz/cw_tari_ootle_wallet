@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Per-wallet state, persisted as one JSON file.
 //!
 //! Holds no key material: keys are re-derived from the seed words on every open, and Cake keeps the

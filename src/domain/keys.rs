@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 use std::str::FromStr;
 
 use ootle_rs::{crypto::derive_ristretto_key, keys::OotleSecretKey, Network};

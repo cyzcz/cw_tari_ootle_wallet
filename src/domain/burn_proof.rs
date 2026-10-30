@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! The L1 wallet's burn proof file, converted into the claim the L2 takes.
 //!
 //! `claim_proof_from_l1` is tari-ootle v0.47.0's `tari_ootle_app_utilities::burn_claim_proof`

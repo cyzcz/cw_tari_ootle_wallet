@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 #[cfg(target_os = "android")]
 mod android;
 pub mod api;

@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Spending: stealth sends, burn claims and the Esmeralda faucet.
 //!
 //! Fees settle the way Universe and walletd do it: the engine never refunds an overpaid fee, so

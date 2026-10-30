@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 pub(crate) mod burn_proof;
 pub(crate) mod keys;
 pub(crate) mod scan;

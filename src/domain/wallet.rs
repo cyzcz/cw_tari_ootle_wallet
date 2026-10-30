@@ -1,3 +1,6 @@
+// Copyright 2026 The Tari Project
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Open wallets, keyed by name, and the indexer connection for each.
 
 use std::{
