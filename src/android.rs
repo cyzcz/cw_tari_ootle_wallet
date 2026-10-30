@@ -23,6 +23,8 @@ pub extern "system" fn Java_com_cakewallet_cw_1tari_1ootle_CwTariOotlePlugin_ini
 ) -> jboolean {
     // A failed init resolves to the default, false.
     unowned_env
-        .with_env(|env| rustls_platform_verifier::android::init_with_env(env, context).map(|()| true))
+        .with_env(|env| {
+            rustls_platform_verifier::android::init_with_env(env, context).map(|()| true)
+        })
         .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }

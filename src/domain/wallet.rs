@@ -49,7 +49,7 @@ impl Wallet {
                 };
                 s.save(&store_path)?;
                 s
-            },
+            }
         };
         let wallet = Arc::new(Wallet {
             address: keys.address(),
@@ -93,10 +93,16 @@ impl Wallet {
     /// A provider that verifies the indexer's answers against the validator set this wallet
     /// trusts, picking up where the last session left off.
     pub async fn provider(&self) -> anyhow::Result<Provider> {
-        let url = self.indexer_url.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let url = self
+            .indexer_url
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         let provider = ProviderBuilder::new()
             .with_network(self.keys.network)
-            .wallet(OotleWallet::from(PrivateKeyProvider::new(self.keys.secret())))
+            .wallet(OotleWallet::from(PrivateKeyProvider::new(
+                self.keys.secret(),
+            )))
             .indexer_trust(IndexerTrust::Verify)
             .connect(&url)
             .await?;

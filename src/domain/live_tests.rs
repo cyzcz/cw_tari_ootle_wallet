@@ -16,7 +16,8 @@ use tari_common_types::seeds::cipher_seed::CipherSeed;
 use super::{keys::AccountKeys, scan::scan, send, store::TxState, wallet::Wallet};
 
 fn indexer() -> String {
-    std::env::var("OOTLE_INDEXER_URL").unwrap_or_else(|_| "https://esme-indexer-a.ootle.tari.com/".into())
+    std::env::var("OOTLE_INDEXER_URL")
+        .unwrap_or_else(|_| "https://esme-indexer-a.ootle.tari.com/".into())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -26,10 +27,19 @@ async fn live_fresh_wallet_scans_clean() {
     // OOTLE_BIRTHDAY=0 times a restore-style scan from genesis.
     let epoch = match std::env::var("OOTLE_BIRTHDAY") {
         Ok(b) => b.parse().unwrap(),
-        Err(_) => crate::api::wallet::get_current_epoch(indexer()).await.unwrap(),
+        Err(_) => crate::api::wallet::get_current_epoch(indexer())
+            .await
+            .unwrap(),
     };
     let keys = AccountKeys::from_seed(&CipherSeed::random(), Network::Esmeralda, 0);
-    let w = Wallet::open("live-fresh", dir.path().to_str().unwrap(), keys, indexer(), epoch).unwrap();
+    let w = Wallet::open(
+        "live-fresh",
+        dir.path().to_str().unwrap(),
+        keys,
+        indexer(),
+        epoch,
+    )
+    .unwrap();
     let t = std::time::Instant::now();
     let mut passes = 0;
     scan(&w, |_| passes += 1).await.expect("scan");
@@ -50,38 +60,66 @@ async fn live_send_round_trip() {
     let seed = std::env::var("OOTLE_FUNDED_SEED").expect("set OOTLE_FUNDED_SEED");
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().to_str().unwrap();
-    let epoch = crate::api::wallet::get_current_epoch(indexer()).await.unwrap();
+    let epoch = crate::api::wallet::get_current_epoch(indexer())
+        .await
+        .unwrap();
     // The funded wallet scans from genesis, like a restore.
-    let a = Wallet::open("live-a", data, AccountKeys::from_words(&seed, Network::Esmeralda).unwrap(), indexer(), 0).unwrap();
+    let a = Wallet::open(
+        "live-a",
+        data,
+        AccountKeys::from_words(&seed, Network::Esmeralda).unwrap(),
+        indexer(),
+        0,
+    )
+    .unwrap();
     let b_keys = AccountKeys::from_seed(&CipherSeed::random(), Network::Esmeralda, 0);
     let b = Wallet::open("live-b", data, b_keys, indexer(), epoch).unwrap();
 
     let t = std::time::Instant::now();
-    scan(&a, |more| println!("a pass, has_more={more}")).await.expect("scan a");
+    scan(&a, |more| println!("a pass, has_more={more}"))
+        .await
+        .expect("scan a");
     println!("restore scan took {:?}", t.elapsed());
     let funded = a.read(|s| s.balance().available);
     println!("a available {funded}");
     assert!(funded > TARI, "OOTLE_FUNDED_SEED has no stealth TARI");
 
     let amount = NonZeroU64::new(TARI / 2).unwrap();
-    let fee = send::estimate_fee(&a, &b.address, amount).await.expect("estimate");
-    println!("fee {fee}");
-    let tx = send::send(&a, &b.address, amount, fee, Some("cake live test".into()), |_| {})
+    let fee = send::estimate_fee(&a, &b.address, amount)
         .await
-        .expect("send");
+        .expect("estimate");
+    println!("fee {fee}");
+    let tx = send::send(
+        &a,
+        &b.address,
+        amount,
+        fee,
+        Some("cake live test".into()),
+        |_| {},
+    )
+    .await
+    .expect("send");
     println!("send tx {tx}");
 
     scan(&a, |_| {}).await.expect("rescan a");
     scan(&b, |_| {}).await.expect("scan b");
     let (a_bal, a_txs) = a.read(|s| (s.balance(), s.transactions.clone()));
     let (b_bal, b_txs) = b.read(|s| (s.balance(), s.transactions.clone()));
-    println!("a available {} locked {}; b available {}", a_bal.available, a_bal.locked, b_bal.available);
+    println!(
+        "a available {} locked {}; b available {}",
+        a_bal.available, a_bal.locked, b_bal.available
+    );
     assert_eq!(b_bal.available, TARI / 2);
     assert_eq!(b_txs.len(), 1);
     assert_eq!(b_txs[0].memo.as_deref(), Some("cake live test"));
     assert_eq!(a_bal.locked, 0);
     assert_eq!(a_bal.available, funded - TARI / 2 - fee);
-    assert_eq!(a_txs.iter().find(|t| t.id == tx).unwrap().state, TxState::Completed);
+    assert_eq!(
+        a_txs.iter().find(|t| t.id == tx).unwrap().state,
+        TxState::Completed
+    );
     // Change comes back to `a` but is not listed as income.
-    assert!(!a_txs.iter().any(|t| t.created_at_ms > a_txs.iter().find(|t| t.id == tx).unwrap().created_at_ms));
+    assert!(!a_txs
+        .iter()
+        .any(|t| t.created_at_ms > a_txs.iter().find(|t| t.id == tx).unwrap().created_at_ms));
 }

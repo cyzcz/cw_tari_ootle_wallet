@@ -23,9 +23,13 @@ use crate::{
 
 pub enum ScanEvent {
     /// A pass was saved; `has_more` while the backlog is still draining.
-    Progress { has_more: bool },
+    Progress {
+        has_more: bool,
+    },
     Completed,
-    Failed { message: String },
+    Failed {
+        message: String,
+    },
 }
 
 static SCANS: LazyLock<Mutex<HashMap<String, AbortHandle>>> = LazyLock::new(Default::default);
@@ -43,13 +47,19 @@ pub async fn start_scan(sink: StreamSink<ScanEvent>, name: String) -> anyhow::Re
         .await;
         let _ = sink.add(match result {
             Ok(Ok(())) => ScanEvent::Completed,
-            Ok(Err(e)) => ScanEvent::Failed { message: format!("{e:#}") },
+            Ok(Err(e)) => ScanEvent::Failed {
+                message: format!("{e:#}"),
+            },
             Err(panic) => ScanEvent::Failed {
                 message: format!("scan panicked: {}", panic_message(&*panic)),
             },
         });
     });
-    if let Some(old) = SCANS.lock().unwrap_or_else(|e| e.into_inner()).insert(name, task.abort_handle()) {
+    if let Some(old) = SCANS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(name, task.abort_handle())
+    {
         old.abort();
     }
     Ok(())
@@ -64,7 +74,11 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> &str {
 }
 
 pub fn stop_scan(name: String) {
-    if let Some(task) = SCANS.lock().unwrap_or_else(|e| e.into_inner()).remove(&name) {
+    if let Some(task) = SCANS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&name)
+    {
         task.abort();
     }
 }

@@ -11,6 +11,7 @@ use std::{future::Future, num::NonZeroU64};
 
 use anyhow::{anyhow, bail};
 use ootle_rs::{
+    builtin_templates::{faucet::IFaucet, UnsignedTransactionBuilder},
     claim_burn::ClaimBurn,
     provider::{Provider as _, WalletProvider as _},
     stealth::{Output, StealthTransfer},
@@ -18,7 +19,6 @@ use ootle_rs::{
         constants::{TARI, TARI_TOKEN},
         UtxoAddress, UtxoId,
     },
-    builtin_templates::{faucet::IFaucet, UnsignedTransactionBuilder},
     wallet::NetworkWallet,
     Epoch, TransactionOutcome, TransactionRequest,
 };
@@ -47,7 +47,9 @@ where
     let mut fee = 1;
     for _ in 0..MAX_FEE_ROUNDS {
         let (unsigned, authorizer) = build(fee).await?;
-        let run = provider.sign_and_send_dry_run_with(&authorizer, unsigned).await?;
+        let run = provider
+            .sign_and_send_dry_run_with(&authorizer, unsigned)
+            .await?;
         if run.finalize.charged_fees() <= fee {
             return Ok(fee);
         }
@@ -97,7 +99,12 @@ async fn build_send<'p>(
     amount: NonZeroU64,
     fee: u64,
     memo: Option<&str>,
-) -> anyhow::Result<(UnsignedTransaction, ootle_rs::wallet::WalletStealthAuthorizer<'p, ootle_rs::wallet::OotleWallet>, Vec<UtxoId>, Vec<String>)> {
+) -> anyhow::Result<(
+    UnsignedTransaction,
+    ootle_rs::wallet::WalletStealthAuthorizer<'p, ootle_rs::wallet::OotleWallet>,
+    Vec<UtxoId>,
+    Vec<String>,
+)> {
     let (inputs, total) = select_inputs(wallet, amount.get().saturating_add(fee))?;
     let change = total - amount.get() - fee;
     let mut recipient = Output::new(to.clone(), TARI_TOKEN, amount);
@@ -110,7 +117,8 @@ async fn build_send<'p>(
     }
     transfer = transfer.to_stealth_output(recipient);
     if let Some(change) = NonZeroU64::new(change) {
-        transfer = transfer.to_stealth_output(Output::new(wallet.address.clone(), TARI_TOKEN, change));
+        transfer =
+            transfer.to_stealth_output(Output::new(wallet.address.clone(), TARI_TOKEN, change));
     }
     let (statement, signers) = transfer.to_revealed_output(fee).prepare().await?;
     // Output 0 is the recipient's; anything after it is our change.
@@ -123,11 +131,12 @@ async fn build_send<'p>(
         .collect();
 
     let max_epoch = Epoch(provider.get_epoch().await?.as_u64() + VALIDITY_EPOCHS);
-    let mut builder = Transaction::builder(provider.network(), max_epoch).with_fee_instructions_builder(|b| {
-        b.stealth_transfer(TARI_TOKEN, statement)
-            .put_last_instruction_output_on_workspace("revealed_bucket")
-            .pay_fee_from_bucket("revealed_bucket")
-    });
+    let mut builder = Transaction::builder(provider.network(), max_epoch)
+        .with_fee_instructions_builder(|b| {
+            b.stealth_transfer(TARI_TOKEN, statement)
+                .put_last_instruction_output_on_workspace("revealed_bucket")
+                .pay_fee_from_bucket("revealed_bucket")
+        });
     builder = builder.add_input(TARI_TOKEN);
     for id in &inputs {
         builder = builder.add_input(UtxoAddress::new(TARI_TOKEN, *id));
@@ -136,12 +145,17 @@ async fn build_send<'p>(
     Ok((builder.build_unsigned(), authorizer, inputs, change_ids))
 }
 
-pub(crate) async fn estimate_fee(wallet: &Wallet, to: &OotleAddress, amount: NonZeroU64) -> anyhow::Result<u64> {
+pub(crate) async fn estimate_fee(
+    wallet: &Wallet,
+    to: &OotleAddress,
+    amount: NonZeroU64,
+) -> anyhow::Result<u64> {
     let provider = wallet.provider().await?;
     settle_fee(&provider, |fee| {
         let provider = &provider;
         async move {
-            let (unsigned, authorizer, _, _) = build_send(wallet, provider, to, amount, fee, None).await?;
+            let (unsigned, authorizer, _, _) =
+                build_send(wallet, provider, to, amount, fee, None).await?;
             Ok((unsigned, authorizer))
         }
     })
@@ -169,7 +183,10 @@ pub(crate) async fn send(
     let (unsigned, authorizer, inputs, change_ids) =
         build_send(wallet, &provider, to, amount, fee, memo.as_deref()).await?;
     let max_epoch = Some(unsigned.max_epoch().as_u64());
-    let tx = TransactionRequest::default().with_transaction(unsigned).build(&authorizer).await?;
+    let tx = TransactionRequest::default()
+        .with_transaction(unsigned)
+        .build(&authorizer)
+        .await?;
     drop(authorizer);
     let tx_id = tx.calculate_id().to_string();
 
@@ -202,32 +219,44 @@ pub(crate) async fn send(
         Err(e) => {
             wallet.write(|s| s.settle(&tx_id, false, 0, Some(e.to_string())))?;
             return Err(e.into());
-        },
+        }
     };
-    on_progress(Progress::Submitted { tx_id: tx_id.clone() });
-    finish(wallet, &tx_id, pending.watch().await.map_err(|e| anyhow!(e.to_string())), fee)?;
+    on_progress(Progress::Submitted {
+        tx_id: tx_id.clone(),
+    });
+    finish(
+        wallet,
+        &tx_id,
+        pending.watch().await.map_err(|e| anyhow!(e.to_string())),
+        fee,
+    )?;
     wallet.remember_validator_set(&provider).await?;
     Ok(tx_id)
 }
 
 /// Records how a submitted send ended. A watch error (timeout, lost connection) leaves it
 /// pending for the next scan to settle.
-fn finish(wallet: &Wallet, tx_id: &str, outcome: anyhow::Result<TransactionOutcome>, fee: u64) -> anyhow::Result<()> {
+fn finish(
+    wallet: &Wallet,
+    tx_id: &str,
+    outcome: anyhow::Result<TransactionOutcome>,
+    fee: u64,
+) -> anyhow::Result<()> {
     match outcome {
         Ok(TransactionOutcome::Commit) => wallet.write(|s| s.settle(tx_id, true, fee, None)),
         // Everything sits in the fee intent, so a fee-only commit spent the inputs as well.
         Ok(TransactionOutcome::OnlyFeeCommit(reason)) => {
             wallet.write(|s| s.settle(tx_id, true, fee, Some(reason.to_string())))?;
             bail!("Transaction {tx_id} failed after paying its fee: {reason}")
-        },
+        }
         Ok(TransactionOutcome::Reject(reason)) => {
             wallet.write(|s| s.settle(tx_id, false, 0, Some(reason.to_string())))?;
             bail!("Transaction {tx_id} was rejected: {reason}")
-        },
+        }
         Err(e) => {
             log::warn!("Lost track of {tx_id}: {e}. The next scan settles it.");
             Ok(())
-        },
+        }
     }
 }
 
@@ -237,12 +266,16 @@ async fn await_commit(pending: ootle_rs::provider::PendingTransaction) -> anyhow
         TransactionOutcome::Commit => Ok(()),
         TransactionOutcome::OnlyFeeCommit(reason) | TransactionOutcome::Reject(reason) => {
             bail!("Transaction {} failed: {reason}", pending.tx_id())
-        },
+        }
     }
 }
 
 /// Claims an L1 burn into this account as a stealth output. Returns the transaction id.
-pub(crate) async fn claim(wallet: &Wallet, proof: BurnProof, on_progress: impl Fn(Progress)) -> anyhow::Result<String> {
+pub(crate) async fn claim(
+    wallet: &Wallet,
+    proof: BurnProof,
+    on_progress: impl Fn(Progress),
+) -> anyhow::Result<String> {
     let mut provider = wallet.provider().await?;
     let build = |fee: u64| {
         let provider = &provider;
@@ -257,10 +290,15 @@ pub(crate) async fn claim(wallet: &Wallet, proof: BurnProof, on_progress: impl F
     };
     let fee = settle_fee(&provider, build).await?;
     let (unsigned, sealer) = build(fee).await?;
-    let tx = TransactionRequest::default().with_transaction(unsigned).build(&sealer).await?;
+    let tx = TransactionRequest::default()
+        .with_transaction(unsigned)
+        .build(&sealer)
+        .await?;
     let tx_id = tx.calculate_id().to_string();
     let pending = provider.send_transaction(tx).await?;
-    on_progress(Progress::Submitted { tx_id: tx_id.clone() });
+    on_progress(Progress::Submitted {
+        tx_id: tx_id.clone(),
+    });
     await_commit(pending).await?;
     Ok(tx_id)
 }
@@ -277,7 +315,8 @@ pub(crate) async fn faucet(wallet: &Wallet) -> anyhow::Result<String> {
     let build = |fee: u64| {
         let provider = &provider;
         async move {
-            let keep = NonZeroU64::new(FAUCET_AMOUNT - fee).ok_or_else(|| anyhow!("fee exceeds faucet amount"))?;
+            let keep = NonZeroU64::new(FAUCET_AMOUNT - fee)
+                .ok_or_else(|| anyhow!("fee exceeds faucet amount"))?;
             let (statement, signers) = StealthTransfer::new(TARI_TOKEN, provider)
                 .spend_revealed_input(FAUCET_AMOUNT)
                 .to_revealed_output(fee)
@@ -296,7 +335,10 @@ pub(crate) async fn faucet(wallet: &Wallet) -> anyhow::Result<String> {
     };
     let fee = settle_fee(&provider, build).await?;
     let (unsigned, authorizer) = build(fee).await?;
-    let tx = TransactionRequest::default().with_transaction(unsigned).build(&authorizer).await?;
+    let tx = TransactionRequest::default()
+        .with_transaction(unsigned)
+        .build(&authorizer)
+        .await?;
     drop(authorizer);
     let tx_id = tx.calculate_id().to_string();
     await_commit(provider.send_transaction(tx).await?).await?;

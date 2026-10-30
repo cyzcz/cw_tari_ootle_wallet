@@ -4,7 +4,9 @@
 use std::str::FromStr;
 
 use ootle_rs::{crypto::derive_ristretto_key, keys::OotleSecretKey, Network};
-use tari_common_types::seeds::{cipher_seed::CipherSeed, mnemonic::Mnemonic, seed_words::SeedWords};
+use tari_common_types::seeds::{
+    cipher_seed::CipherSeed, mnemonic::Mnemonic, seed_words::SeedWords,
+};
 use tari_crypto::{
     keys::PublicKey,
     ristretto::{RistrettoPublicKey, RistrettoSecretKey},
@@ -36,7 +38,11 @@ impl AccountKeys {
     }
 
     pub fn secret(&self) -> OotleSecretKey {
-        OotleSecretKey::new(self.network, self.account_secret.clone(), self.view_secret.clone())
+        OotleSecretKey::new(
+            self.network,
+            self.account_secret.clone(),
+            self.view_secret.clone(),
+        )
     }
 
     pub fn address(&self) -> OotleAddress {
@@ -50,7 +56,8 @@ impl AccountKeys {
 }
 
 pub(crate) fn parse_seed(seed_words: &str) -> anyhow::Result<CipherSeed> {
-    let words = SeedWords::from_str(seed_words.trim()).map_err(|e| anyhow::anyhow!("invalid seed words: {e}"))?;
+    let words = SeedWords::from_str(seed_words.trim())
+        .map_err(|e| anyhow::anyhow!("invalid seed words: {e}"))?;
     Ok(CipherSeed::from_mnemonic(&words, None)?)
 }
 
@@ -70,10 +77,18 @@ mod tests {
 
     #[test]
     fn restore_reproduces_the_address() {
-        let created = crate::api::wallet::create_wallet(crate::api::wallet::TariOotleNetwork::Esmeralda).unwrap();
+        let created =
+            crate::api::wallet::create_wallet(crate::api::wallet::TariOotleNetwork::Esmeralda)
+                .unwrap();
         assert_eq!(created.seed_words.split(' ').count(), 24);
-        assert!(created.address.starts_with("otl_esm_"), "{}", created.address);
-        let restored = AccountKeys::from_words(&created.seed_words, Network::Esmeralda).unwrap().address();
+        assert!(
+            created.address.starts_with("otl_esm_"),
+            "{}",
+            created.address
+        );
+        let restored = AccountKeys::from_words(&created.seed_words, Network::Esmeralda)
+            .unwrap()
+            .address();
         assert_eq!(restored.to_string(), created.address);
     }
 }

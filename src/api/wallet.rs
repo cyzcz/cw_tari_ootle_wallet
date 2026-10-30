@@ -40,13 +40,17 @@ pub fn create_wallet(network: TariOotleNetwork) -> anyhow::Result<WalletCreated>
     let words = seed.to_mnemonic(MnemonicLanguage::English, None)?;
     Ok(WalletCreated {
         seed_words: words.join(" ").reveal().clone(),
-        address: AccountKeys::from_seed(&seed, network.into(), 0).address().to_string(),
+        address: AccountKeys::from_seed(&seed, network.into(), 0)
+            .address()
+            .to_string(),
     })
 }
 
 /// Address of account 0 for these seed words. Same words as the L1 (Minotari) wallet.
 pub fn address_from_seed(seed_words: String, network: TariOotleNetwork) -> anyhow::Result<String> {
-    Ok(AccountKeys::from_words(&seed_words, network.into())?.address().to_string())
+    Ok(AccountKeys::from_words(&seed_words, network.into())?
+        .address()
+        .to_string())
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -90,7 +94,13 @@ pub struct WalletInfo {
 pub fn open_wallet(req: OpenWalletRequest) -> anyhow::Result<WalletInfo> {
     let keys = AccountKeys::from_words(&req.seed_words, req.network.into())?;
     let claim_public_key = keys.account_public_key().to_hex();
-    let wallet = Wallet::open(&req.name, &req.data_dir, keys, req.indexer_url, req.birthday_epoch)?;
+    let wallet = Wallet::open(
+        &req.name,
+        &req.data_dir,
+        keys,
+        req.indexer_url,
+        req.birthday_epoch,
+    )?;
     Ok(WalletInfo {
         address: wallet.address.to_string(),
         claim_public_key,

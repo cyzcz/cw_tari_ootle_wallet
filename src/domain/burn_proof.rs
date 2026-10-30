@@ -11,12 +11,14 @@ use ootle_byte_type::ToByteType;
 use ootle_rs::template_types::EncryptedData;
 use tari_common_types::burn_proof::{BurnOutputProof, MmrInclusionProof};
 use tari_engine_types::confidential::{
-    BurnOutput, BurnOutputFeatures, BurnOutputInclusionProof, BurnSidechainId, MinotariBurnClaimProof,
-    MmrInclusionProof as ClaimMmrInclusionProof,
+    BurnOutput, BurnOutputFeatures, BurnOutputInclusionProof, BurnSidechainId,
+    MinotariBurnClaimProof, MmrInclusionProof as ClaimMmrInclusionProof,
 };
 use tari_sidechain::{BurnClaimProof, CompleteClaimBurnProof};
 use tari_template_lib::types::Hash32;
-use tari_transaction_components::transaction_components::{OutputFeatures, OutputType, SideChainFeatureData};
+use tari_transaction_components::transaction_components::{
+    OutputFeatures, OutputType, SideChainFeatureData,
+};
 
 pub(crate) struct BurnProof {
     pub claim_proof: MinotariBurnClaimProof,
@@ -31,9 +33,11 @@ impl BurnProof {
         let file: CompleteClaimBurnProof = serde_json::from_str(json)?;
         let len = file.encrypted_data.len();
         Ok(Self {
-            claim_proof: claim_proof_from_l1(&file.claim_proof).map_err(|e| anyhow::anyhow!("Invalid burn proof: {e}"))?,
-            encrypted_data: EncryptedData::try_from(file.encrypted_data)
-                .map_err(|_| anyhow::anyhow!("The burn proof's encrypted data is {len} bytes, out of range"))?,
+            claim_proof: claim_proof_from_l1(&file.claim_proof)
+                .map_err(|e| anyhow::anyhow!("Invalid burn proof: {e}"))?,
+            encrypted_data: EncryptedData::try_from(file.encrypted_data).map_err(|_| {
+                anyhow::anyhow!("The burn proof's encrypted data is {len} bytes, out of range")
+            })?,
             mined_in_epoch: file.mined_in_epoch,
         })
     }
@@ -48,16 +52,20 @@ fn claim_proof_from_l1(proof: &BurnClaimProof) -> Result<MinotariBurnClaimProof,
         block_output_proof,
         ..
     } = &proof.output_proof;
-    let features: OutputFeatures =
-        borsh::from_slice(&output.features).map_err(|e| format!("invalid burn output features: {e}"))?;
+    let features: OutputFeatures = borsh::from_slice(&output.features)
+        .map_err(|e| format!("invalid burn output features: {e}"))?;
     if features.output_type != OutputType::Burn {
-        return Err(format!("the output is a {} output, not a burn", features.output_type));
+        return Err(format!(
+            "the output is a {} output, not a burn",
+            features.output_type
+        ));
     }
     let sidechain_feature = features
         .sidechain_feature
         .as_ref()
         .ok_or("the burn output has no sidechain feature, so it names no claimant")?;
-    let SideChainFeatureData::ConfidentialOutput(confidential_output) = &sidechain_feature.data else {
+    let SideChainFeatureData::ConfidentialOutput(confidential_output) = &sidechain_feature.data
+    else {
         return Err("the burn output's sidechain feature is not a confidential output".to_string());
     };
     Ok(MinotariBurnClaimProof {
@@ -96,14 +104,21 @@ fn claim_proof_from_l1(proof: &BurnClaimProof) -> Result<MinotariBurnClaimProof,
     })
 }
 
-fn bytes<const N: usize>(field: &str, bytes: Vec<u8>) -> Result<bounded_vec::BoundedVec<u8, 1, N>, String> {
+fn bytes<const N: usize>(
+    field: &str,
+    bytes: Vec<u8>,
+) -> Result<bounded_vec::BoundedVec<u8, 1, N>, String> {
     let len = bytes.len();
-    bounded_vec::BoundedVec::<u8, 1, N>::from_vec(bytes).map_err(|_| format!("burn output {field} length {len} is out of range"))
+    bounded_vec::BoundedVec::<u8, 1, N>::from_vec(bytes)
+        .map_err(|_| format!("burn output {field} length {len} is out of range"))
 }
 
 fn mmr_proof(proof: &MmrInclusionProof) -> ClaimMmrInclusionProof {
     let hashes = |hashes: &[tari_common_types::types::FixedHash]| {
-        hashes.iter().map(|hash| Hash32::from_array(hash.into_array())).collect()
+        hashes
+            .iter()
+            .map(|hash| Hash32::from_array(hash.into_array()))
+            .collect()
     };
     ClaimMmrInclusionProof {
         leaf_index: proof.leaf_index,
@@ -123,7 +138,9 @@ mod tests {
         keys::{PublicKey as _, SecretKey as _},
         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
     };
-    use tari_transaction_components::transaction_components::{ConfidentialOutputData, SideChainFeature};
+    use tari_transaction_components::transaction_components::{
+        ConfidentialOutputData, SideChainFeature,
+    };
 
     use super::*;
 
@@ -178,7 +195,9 @@ mod tests {
         OutputFeatures {
             output_type: OutputType::Burn,
             sidechain_feature: claim_public_key.map(|claim_public_key| SideChainFeature {
-                data: SideChainFeatureData::ConfidentialOutput(ConfidentialOutputData { claim_public_key }),
+                data: SideChainFeatureData::ConfidentialOutput(ConfidentialOutputData {
+                    claim_public_key,
+                }),
                 sidechain_id: None,
             }),
             ..Default::default()
@@ -188,11 +207,24 @@ mod tests {
     #[test]
     fn converts_a_minotari_proof_file() {
         let proof = BurnProof::from_json(&proof_file(&burn_to(Some(public_key(3))))).unwrap();
-        assert_eq!(proof.claim_proof.output.features.claim_public_key, public_key(3).to_byte_type());
+        assert_eq!(
+            proof.claim_proof.output.features.claim_public_key,
+            public_key(3).to_byte_type()
+        );
         assert_eq!(proof.claim_proof.value, 12_345);
         assert_eq!(proof.claim_proof.output.script.as_slice(), &[1, 0x73]);
-        assert_eq!(proof.claim_proof.inclusion_proof.normal_output_proof.leaf_index, 2);
-        assert_eq!(proof.claim_proof.inclusion_proof.block_hash, Hash32::from_array([4u8; 32]));
+        assert_eq!(
+            proof
+                .claim_proof
+                .inclusion_proof
+                .normal_output_proof
+                .leaf_index,
+            2
+        );
+        assert_eq!(
+            proof.claim_proof.inclusion_proof.block_hash,
+            Hash32::from_array([4u8; 32])
+        );
         assert_eq!(proof.mined_in_epoch, 3);
         assert_eq!(proof.encrypted_data.as_ref(), &[9; 80]);
     }
@@ -203,12 +235,21 @@ mod tests {
             sidechain_feature: burn_to(Some(public_key(3))).sidechain_feature,
             ..Default::default()
         };
-        for (features, reason) in [(not_a_burn, "not a burn"), (burn_to(None), "no sidechain feature")] {
-            let err = BurnProof::from_json(&proof_file(&features)).err().unwrap().to_string();
+        for (features, reason) in [
+            (not_a_burn, "not a burn"),
+            (burn_to(None), "no sidechain feature"),
+        ] {
+            let err = BurnProof::from_json(&proof_file(&features))
+                .err()
+                .unwrap()
+                .to_string();
             assert!(err.contains(reason), "expected '{reason}', got '{err}'");
         }
         // cw_tari_wallet's fixture is a well-formed file around a placeholder (non-burn) output.
-        let err = BurnProof::from_json(include_str!("testdata/l1_burn_proof.json")).err().unwrap().to_string();
+        let err = BurnProof::from_json(include_str!("testdata/l1_burn_proof.json"))
+            .err()
+            .unwrap()
+            .to_string();
         assert!(err.starts_with("Invalid burn proof"), "{err}");
     }
 }

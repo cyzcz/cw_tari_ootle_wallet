@@ -79,10 +79,19 @@ pub fn get_claims(name: String) -> anyhow::Result<Vec<ClaimDto>> {
 }
 
 /// Submits the claim and streams until it lands. A failure leaves the claim pending to retry.
-pub async fn claim_burn(sink: StreamSink<SendEvent>, name: String, claim_id: String) -> anyhow::Result<()> {
+pub async fn claim_burn(
+    sink: StreamSink<SendEvent>,
+    name: String,
+    claim_id: String,
+) -> anyhow::Result<()> {
     let wallet = Wallet::get(&name)?;
     let proof_json = wallet
-        .read(|s| s.claims.iter().find(|c| c.id == claim_id).map(|c| c.proof_json.clone()))
+        .read(|s| {
+            s.claims
+                .iter()
+                .find(|c| c.id == claim_id)
+                .map(|c| c.proof_json.clone())
+        })
         .ok_or_else(|| anyhow::anyhow!("no claim {claim_id}"))?;
     let proof = BurnProof::from_json(&proof_json)?;
     let set = |state: ClaimState, tx_id: Option<String>, error: Option<String>| {
@@ -98,19 +107,19 @@ pub async fn claim_burn(sink: StreamSink<SendEvent>, name: String, claim_id: Str
         send::Progress::Submitted { tx_id } => {
             let _ = set(ClaimState::Submitted, Some(tx_id.clone()), None);
             let _ = sink.add(SendEvent::Submitted { tx_id });
-        },
+        }
     })
     .await;
     match result {
         Ok(tx_id) => {
             set(ClaimState::Claimed, Some(tx_id.clone()), None)?;
             let _ = sink.add(SendEvent::Completed { tx_id });
-        },
+        }
         Err(e) => {
             let message = format!("{e:#}");
             set(ClaimState::Pending, None, Some(message.clone()))?;
             let _ = sink.add(SendEvent::Failed { message });
-        },
+        }
     }
     Ok(())
 }

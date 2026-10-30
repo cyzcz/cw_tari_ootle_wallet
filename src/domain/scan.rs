@@ -21,8 +21,8 @@ use ootle_rs::{
     template_types::{constants::TARI_TOKEN, crypto::RistrettoPublicKeyBytes, UtxoAddress, UtxoId},
     Epoch, ToAccountAddress,
 };
-use tari_crypto::{keys::PublicKey, ristretto::RistrettoPublicKey};
 use tari_crypto::tari_utilities::ByteArray;
+use tari_crypto::{keys::PublicKey, ristretto::RistrettoPublicKey};
 use tari_ootle_common_types::engine_types::{substate::SubstateId, Utxo};
 
 use super::{
@@ -92,13 +92,19 @@ async fn pass(wallet: &Wallet, provider: &Provider) -> anyhow::Result<bool> {
                 let Ok(nonce) = public_nonce.try_from_byte_type() else {
                     continue;
                 };
-                let expected =
-                    crypto.derive_stealth_output_tag(wallet.keys.network, &wallet.keys.view_secret, &nonce, &TARI_TOKEN);
+                let expected = crypto.derive_stealth_output_tag(
+                    wallet.keys.network,
+                    &wallet.keys.view_secret,
+                    &nonce,
+                    &TARI_TOKEN,
+                );
                 if expected == tag {
                     candidates.push((tag, public_nonce));
                 }
-            },
-            StealthUtxoFrame::Spent { id, .. } | StealthUtxoFrame::Burnt { id, .. } => spent.push(id),
+            }
+            StealthUtxoFrame::Spent { id, .. } | StealthUtxoFrame::Burnt { id, .. } => {
+                spent.push(id)
+            }
             StealthUtxoFrame::EndOfShard {
                 shard,
                 max_state_version,
@@ -156,7 +162,10 @@ async fn pass(wallet: &Wallet, provider: &Provider) -> anyhow::Result<bool> {
 async fn recover(
     wallet: &Wallet,
     provider: &Provider,
-    candidates: &[(ootle_rs::template_types::crypto::UtxoTag, RistrettoPublicKeyBytes)],
+    candidates: &[(
+        ootle_rs::template_types::crypto::UtxoTag,
+        RistrettoPublicKeyBytes,
+    )],
 ) -> anyhow::Result<Vec<(String, OwnedOutput)>> {
     let mut found = Vec::new();
     for (id, _) in provider.fetch_unspent_utxos(TARI_TOKEN, candidates).await? {
@@ -190,15 +199,24 @@ fn decrypt_if_ours(wallet: &Wallet, id: UtxoId, utxo: &Utxo) -> Option<OwnedOutp
     let nonce: RistrettoPublicKey = out.output.public_nonce.try_from_byte_type().ok()?;
     let keys = &wallet.keys;
     let key = kdfs::encrypted_data_dh_kdf_aead(&keys.view_secret, &nonce);
-    let decrypted = unblind_output(&id.into_commitment_bytes(), &out.output.encrypted_data, &key, false).ok()?;
+    let decrypted = unblind_output(
+        &id.into_commitment_bytes(),
+        &out.output.encrypted_data,
+        &key,
+        false,
+    )
+    .ok()?;
 
     let crypto = StealthCryptoApi;
-    if crypto.derive_stealth_output_tag(keys.network, &keys.view_secret, &nonce, &TARI_TOKEN) != out.tag {
+    if crypto.derive_stealth_output_tag(keys.network, &keys.view_secret, &nonce, &TARI_TOKEN)
+        != out.tag
+    {
         return None;
     }
     // Script-locked outputs are not spendable by the account key alone; v1 ignores them.
     let spend_key = out.auth.spend_key()?;
-    let owner_secret = crypto.derive_stealth_owner_secret(keys.network, &keys.account_secret, &nonce);
+    let owner_secret =
+        crypto.derive_stealth_owner_secret(keys.network, &keys.account_secret, &nonce);
     if RistrettoPublicKey::from_secret_key(&owner_secret).as_bytes() != spend_key.as_bytes() {
         debug!("Stealth output {id} decrypts with our view key but its spend key is not ours");
         return None;
@@ -207,7 +225,10 @@ fn decrypt_if_ours(wallet: &Wallet, id: UtxoId, utxo: &Utxo) -> Option<OwnedOutp
         value: decrypted.value(),
         status: OutputStatus::Unspent,
         locked_by: None,
-        memo: decrypted.memo().and_then(|m| m.as_memo_message()).map(str::to_string),
+        memo: decrypted
+            .memo()
+            .and_then(|m| m.as_memo_message())
+            .map(str::to_string),
         found_at_ms: now_ms(),
     })
 }
@@ -224,7 +245,12 @@ async fn expire_stale_sends(wallet: &Wallet, provider: &Provider) -> anyhow::Res
             .map(|t| t.id.clone())
             .collect();
         for id in stale {
-            s.settle(&id, false, 0, Some("expired before it was finalized".into()));
+            s.settle(
+                &id,
+                false,
+                0,
+                Some("expired before it was finalized".into()),
+            );
         }
     })
 }

@@ -22,7 +22,10 @@ pub enum SendEvent {
 fn parse(to: &str, amount: u64) -> anyhow::Result<(OotleAddress, NonZeroU64)> {
     let to = OotleAddress::from_str(to)?;
     to.validate()?;
-    Ok((to, NonZeroU64::new(amount).ok_or_else(|| anyhow!("amount must be above zero"))?))
+    Ok((
+        to,
+        NonZeroU64::new(amount).ok_or_else(|| anyhow!("amount must be above zero"))?,
+    ))
 }
 
 /// The fee (µT) a send of `amount` to `to` settles at. Show it to the user and pass it unchanged
@@ -47,14 +50,16 @@ pub async fn send_transaction(
         send::send(&wallet, &to, amount, fee, memo, |p| match p {
             send::Progress::Submitted { tx_id } => {
                 let _ = sink.add(SendEvent::Submitted { tx_id });
-            },
+            }
         })
         .await
     }
     .await;
     let _ = sink.add(match result {
         Ok(tx_id) => SendEvent::Completed { tx_id },
-        Err(e) => SendEvent::Failed { message: format!("{e:#}") },
+        Err(e) => SendEvent::Failed {
+            message: format!("{e:#}"),
+        },
     });
     Ok(())
 }

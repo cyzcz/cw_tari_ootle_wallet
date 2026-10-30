@@ -15,8 +15,8 @@ use std::{
 };
 
 use ootle_rs::provider::SavedValidatorSet;
-use tari_ootle_common_types::{shard::Shard, StateVersion};
 use serde::{Deserialize, Serialize};
+use tari_ootle_common_types::{shard::Shard, StateVersion};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum OutputStatus {
@@ -125,7 +125,13 @@ impl Store {
     }
 
     pub fn balance(&self) -> Balance {
-        let sum = |s: OutputStatus| self.outputs.values().filter(|o| o.status == s).map(|o| o.value).sum::<u64>();
+        let sum = |s: OutputStatus| {
+            self.outputs
+                .values()
+                .filter(|o| o.status == s)
+                .map(|o| o.value)
+                .sum::<u64>()
+        };
         Balance {
             available: sum(OutputStatus::Unspent),
             locked: sum(OutputStatus::Locked),
@@ -133,7 +139,9 @@ impl Store {
     }
 
     pub fn has_live_outputs(&self) -> bool {
-        self.outputs.values().any(|o| o.status != OutputStatus::Spent)
+        self.outputs
+            .values()
+            .any(|o| o.status != OutputStatus::Spent)
     }
 
     pub fn tx_mut(&mut self, id: &str) -> Option<&mut TxRecord> {
@@ -142,12 +150,24 @@ impl Store {
 
     /// Settle a submitted transaction: its locked inputs become spent (or unspent again on failure).
     pub fn settle(&mut self, tx_id: &str, ok: bool, fee: u64, error: Option<String>) {
-        for o in self.outputs.values_mut().filter(|o| o.locked_by.as_deref() == Some(tx_id)) {
-            o.status = if ok { OutputStatus::Spent } else { OutputStatus::Unspent };
+        for o in self
+            .outputs
+            .values_mut()
+            .filter(|o| o.locked_by.as_deref() == Some(tx_id))
+        {
+            o.status = if ok {
+                OutputStatus::Spent
+            } else {
+                OutputStatus::Unspent
+            };
             o.locked_by = None;
         }
         if let Some(tx) = self.tx_mut(tx_id) {
-            tx.state = if ok { TxState::Completed } else { TxState::Failed };
+            tx.state = if ok {
+                TxState::Completed
+            } else {
+                TxState::Failed
+            };
             tx.fee = fee;
             tx.error = error;
         }
@@ -192,9 +212,12 @@ mod tests {
     #[test]
     fn settle_moves_locked_inputs_and_balance() {
         let mut s = Store::default();
-        s.outputs.insert("a".into(), output(10, OutputStatus::Locked, Some("t1")));
-        s.outputs.insert("b".into(), output(7, OutputStatus::Unspent, None));
-        s.outputs.insert("c".into(), output(3, OutputStatus::Locked, Some("t2")));
+        s.outputs
+            .insert("a".into(), output(10, OutputStatus::Locked, Some("t1")));
+        s.outputs
+            .insert("b".into(), output(7, OutputStatus::Unspent, None));
+        s.outputs
+            .insert("c".into(), output(3, OutputStatus::Locked, Some("t2")));
         s.transactions.push(tx("t1"));
         s.transactions.push(tx("t2"));
         assert_eq!((s.balance().available, s.balance().locked), (7, 13));
@@ -218,7 +241,8 @@ mod tests {
             birthday_epoch: 9,
             ..Store::default()
         };
-        s.outputs.insert("a".into(), output(1, OutputStatus::Unspent, None));
+        s.outputs
+            .insert("a".into(), output(1, OutputStatus::Unspent, None));
         s.save(&path).unwrap();
         let back = Store::load(&path).unwrap().unwrap();
         assert_eq!(back.birthday_epoch, 9);
